@@ -18,7 +18,7 @@ import {
     leaveMeeting,
     startMeeting,
     endMeeting
-} from "../services/meeting";
+} from "../services/Meeting.js";
 
 import "../styles/MeetingRoom.css";
 

@@ -11,7 +11,7 @@ import {
     getMeetingParticipants,
     joinMeeting,
     leaveMeeting
-} from "../services/meeting";
+} from "../services/Meeting.js";
 
 import "../styles/JoinMeeting.css";
 
