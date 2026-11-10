@@ -32,19 +32,24 @@ const SFU_URL =
 const PRODUCER_POLL_INTERVAL = 2000;
 
 async function sfuRequest(path, options = {}) {
+    const token = localStorage.getItem("accessToken");
+
     const response = await fetch(`${SFU_URL}${path}`, {
         ...options,
         headers: {
             "Content-Type": "application/json",
+            ...(token
+                ? { Authorization: `Bearer ${token}` }
+                : {}),
             ...(options.headers || {})
         }
     });
 
-    const data = await response.json().catch(() => ({}));
+    const data = await response.json();
 
     if (!response.ok) {
         throw new Error(
-            data.message || `SFU request failed: ${response.status}`
+            data.message || "SFU request failed"
         );
     }
 
@@ -152,6 +157,13 @@ function MeetingRoom() {
 
     const currentEmail = getCurrentUserEmail();
 
+    const screenStreamRef = useRef(null);
+    const screenProducerRef = useRef(null);
+    const screenVideoRef = useRef(null);
+
+    const [screenShareEnabled, setScreenShareEnabled] = useState(false);
+    const [screenShareLoading, setScreenShareLoading] = useState(false);
+
     const currentParticipant = participants.find(
         p => p.email?.toLowerCase() === currentEmail.toLowerCase()
     );
@@ -198,6 +210,24 @@ function MeetingRoom() {
                 producerPollRef.current = null;
             }
 
+            // Stop display capture before closing the mediasoup producers.
+            if (screenStreamRef.current) {
+                screenStreamRef.current.getTracks().forEach(track => {
+                    track.onended = null;
+                    track.stop();
+                });
+            }
+
+            screenStreamRef.current = null;
+            screenProducerRef.current = null;
+
+            if (screenVideoRef.current) {
+                screenVideoRef.current.srcObject = null;
+            }
+
+            setScreenShareEnabled(false);
+            setScreenShareLoading(false);
+
             producersRef.current.forEach(producer => {
                 try {
                     producer.close();
@@ -206,9 +236,9 @@ function MeetingRoom() {
                 }
             });
 
-            consumersRef.current.forEach(consumer => {
+            consumersRef.current.forEach(consumerData => {
                 try {
-                    consumer.close();
+                    consumerData.consumer.close();
                 } catch (err) {
                     console.warn("Consumer cleanup error:", err);
                 }
@@ -611,6 +641,7 @@ function MeetingRoom() {
     // MEDIASOUP CONSUMER DISCOVERY
     // ========================================
 
+
     const discoverProducers = useCallback(async () => {
         const device = deviceRef.current;
         const receiveTransport = receiveTransportRef.current;
@@ -629,38 +660,18 @@ function MeetingRoom() {
                 producers.map(producer => producer.producerId)
             );
 
-            // Remove consumers for producers that no longer exist.
-            for (const [consumerId, consumerData] of consumersRef.current.entries()) {
-                if (!activeProducerIds.has(consumerData.producerId)) {
-                    consumerData.consumer.close();
+            // Remove producers that no longer exist.
+            for (const [consumerId, data] of consumersRef.current.entries()) {
+                if (!activeProducerIds.has(data.producerId)) {
+                    data.consumer.close();
                     consumersRef.current.delete(consumerId);
-                    consumedProducerIdsRef.current.delete(
-                        consumerData.producerId
-                    );
-
-                    const stream = remoteStreamsRef.current.get(
-                        consumerData.peerId
-                    );
-
-                    if (stream) {
-                        stream.removeTrack(consumerData.consumer.track);
-
-                        if (stream.getTracks().length === 0) {
-                            remoteStreamsRef.current.delete(
-                                consumerData.peerId
-                            );
-                        }
-                    }
+                    consumedProducerIdsRef.current.delete(data.producerId);
+                    remoteStreamsRef.current.delete(data.producerId);
                 }
             }
 
             setRemoteStreams(
-                Array.from(remoteStreamsRef.current.entries()).map(
-                    ([remotePeerId, stream]) => ({
-                        peerId: remotePeerId,
-                        stream
-                    })
-                )
+                Array.from(remoteStreamsRef.current.values())
             );
 
             for (const producer of producers) {
@@ -670,7 +681,6 @@ function MeetingRoom() {
 
                 if (removedRef.current) return;
 
-                // Prevent duplicate consumer requests.
                 consumedProducerIdsRef.current.add(producer.producerId);
 
                 try {
@@ -695,49 +705,47 @@ function MeetingRoom() {
                         rtpParameters: consumerData.rtpParameters
                     });
 
+                    const source =
+                        producer.appData?.source === "screen"
+                            ? "screen"
+                            : producer.kind === "audio"
+                                ? "audio"
+                                : "camera";
+
+                    // Separate MediaStream for every producer.
+                    const stream = new MediaStream([consumer.track]);
+
+                    const mediaEntry = {
+                        producerId: producer.producerId,
+                        peerId: producer.peerId,
+                        kind: producer.kind,
+                        source,
+                        stream
+                    };
+
                     consumersRef.current.set(consumer.id, {
                         consumer,
                         producerId: producer.producerId,
                         peerId: producer.peerId
                     });
 
-                    let remoteStream = remoteStreamsRef.current.get(
-                        producer.peerId
+                    remoteStreamsRef.current.set(
+                        producer.producerId,
+                        mediaEntry
                     );
 
-                    if (!remoteStream) {
-                        remoteStream = new MediaStream();
-
-                        remoteStreamsRef.current.set(
-                            producer.peerId,
-                            remoteStream
-                        );
-                    }
-
-                    remoteStream.addTrack(consumer.track);
-
-                    consumer.on("trackended", () => {
-                        remoteStream.removeTrack(consumer.track);
-
-                        if (remoteStream.getTracks().length === 0) {
-                            remoteStreamsRef.current.delete(producer.peerId);
-                        }
+                    const removeConsumer = () => {
+                        remoteStreamsRef.current.delete(producer.producerId);
+                        consumersRef.current.delete(consumer.id);
 
                         setRemoteStreams(
-                            Array.from(remoteStreamsRef.current.entries()).map(
-                                ([remotePeerId, stream]) => ({
-                                    peerId: remotePeerId,
-                                    stream
-                                })
-                            )
+                            Array.from(remoteStreamsRef.current.values())
                         );
-                    });
+                    };
 
-                    consumer.on("transportclose", () => {
-                        consumersRef.current.delete(consumer.id);
-                    });
+                    consumer.on("trackended", removeConsumer);
+                    consumer.on("transportclose", removeConsumer);
 
-                    // Resume consumer on the SFU.
                     await sfuRequest(
                         `/api/rooms/${meetingId}/consumers/${peerId}/${consumer.id}/resume`,
                         { method: "PATCH" }
@@ -746,19 +754,15 @@ function MeetingRoom() {
                     consumer.resume();
 
                     setRemoteStreams(
-                        Array.from(remoteStreamsRef.current.entries()).map(
-                            ([remotePeerId, stream]) => ({
-                                peerId: remotePeerId,
-                                stream
-                            })
-                        )
+                        Array.from(remoteStreamsRef.current.values())
                     );
 
                     console.log(
-                        "Remote producer consumed:",
+                        "Consumed producer:",
                         producer.producerId,
-                        producer.kind
+                        source
                     );
+
                 } catch (err) {
                     consumedProducerIdsRef.current.delete(
                         producer.producerId
@@ -1007,6 +1011,161 @@ function MeetingRoom() {
         discoverProducers,
         cleanupSfu
     ]);
+    // ========================================
+    // SCREEN SHARING
+    // ========================================
+
+    const stopScreenShare = useCallback(async () => {
+        const producer = screenProducerRef.current;
+        const peerId = peerIdRef.current;
+
+        // Clear the ref first so repeated stop events are harmless.
+        screenProducerRef.current = null;
+
+        if (producer) {
+            try {
+                if (peerId) {
+                    await sfuRequest(
+                        `/api/rooms/${meetingId}/producers/${peerId}/${producer.id}`,
+                        { method: "DELETE" }
+                    );
+                }
+            } catch (err) {
+                // Closing the local producer and peer cleanup still release
+                // the media resources if the SFU delete request fails.
+                console.warn("Unable to delete screen producer:", err);
+            }
+
+            try {
+                producer.close();
+            } catch (err) {
+                console.warn("Unable to close screen producer:", err);
+            }
+
+            producersRef.current.delete(producer.id);
+        }
+
+        const screenStream = screenStreamRef.current;
+        screenStreamRef.current = null;
+
+        if (screenStream) {
+            screenStream.getTracks().forEach(track => {
+                track.onended = null;
+                track.stop();
+            });
+        }
+
+        if (screenVideoRef.current) {
+            screenVideoRef.current.srcObject = null;
+        }
+
+        setScreenShareEnabled(false);
+        setScreenShareLoading(false);
+    }, [meetingId]);
+
+    const startScreenShare = async () => {
+        if (meeting?.status !== "LIVE") {
+            setSfuError("Screen sharing is available only during a live meeting.");
+            return;
+        }
+
+        if (!currentParticipant || currentParticipant.status !== "JOINED") {
+            setSfuError("You must be admitted to the meeting before sharing your screen.");
+            return;
+        }
+
+        if (!sendTransportRef.current || !sfuConnected) {
+            setSfuError("The media connection is not ready. Please try again.");
+            return;
+        }
+
+        if (screenShareEnabled || screenShareLoading) return;
+
+        if (!navigator.mediaDevices?.getDisplayMedia) {
+            setSfuError("Screen sharing is not supported by this browser. Use a recent version of Chrome or Edge.");
+            return;
+        }
+
+        setScreenShareLoading(true);
+        setSfuError("");
+
+        let displayStream = null;
+
+        try {
+            // This call must happen directly from the Share button click.
+            displayStream = await navigator.mediaDevices.getDisplayMedia({
+                video: {
+                    frameRate: { ideal: 30, max: 30 }
+                },
+                audio: false
+            });
+
+            const screenTrack = displayStream.getVideoTracks()[0];
+
+            if (!screenTrack) {
+                throw new Error("The selected screen did not provide a video track.");
+            }
+
+            screenStreamRef.current = displayStream;
+
+            const producer = await sendTransportRef.current.produce({
+                track: screenTrack,
+                appData: {
+                    source: "screen",
+                    mediaType: "screen"
+                }
+            });
+
+            screenProducerRef.current = producer;
+            producersRef.current.set(producer.id, producer);
+
+            producer.on("transportclose", () => {
+                producersRef.current.delete(producer.id);
+
+                if (screenProducerRef.current?.id === producer.id) {
+                    screenProducerRef.current = null;
+                }
+
+                const activeStream = screenStreamRef.current;
+                screenStreamRef.current = null;
+
+                activeStream?.getTracks().forEach(track => {
+                    track.onended = null;
+                    track.stop();
+                });
+
+                if (screenVideoRef.current) {
+                    screenVideoRef.current.srcObject = null;
+                }
+
+                setScreenShareEnabled(false);
+            });
+
+            // Also handle the browser's native "Stop sharing" control.
+            screenTrack.onended = () => {
+                stopScreenShare();
+            };
+
+            setScreenShareEnabled(true);
+        } catch (err) {
+            console.error("Unable to start screen sharing:", err);
+
+            displayStream?.getTracks().forEach(track => {
+                track.onended = null;
+                track.stop();
+            });
+
+            screenStreamRef.current = null;
+            screenProducerRef.current = null;
+
+            if (err.name !== "NotAllowedError" && err.name !== "AbortError") {
+                setSfuError(err.message || "Unable to start screen sharing.");
+            }
+        } finally {
+            setScreenShareLoading(false);
+        }
+    };
+
     // ========================================
     // MICROPHONE CONTROL
     // ========================================
@@ -1274,6 +1433,12 @@ function MeetingRoom() {
         p => p.status === "JOINED"
     );
 
+    const hasActiveScreenShare =
+        screenShareEnabled ||
+        remoteStreams.some(
+            media => media.kind === "video" && media.source === "screen"
+        );
+
     // ========================================
     // MEETING UI
     // ========================================
@@ -1342,11 +1507,19 @@ function MeetingRoom() {
 
                     {/* VIDEO GRID */}
 
-                    <div className="room-video-grid">
+                    <div
+                        className={`room-video-grid ${
+                            hasActiveScreenShare ? "has-screen-share" : ""
+                        }`}
+                    >
 
                         {/* LOCAL VIDEO */}
 
-                        <div className="video-tile local-video-tile">
+                        <div
+                            className={`video-tile local-video-tile ${
+                                hasActiveScreenShare ? "camera-overlay-tile" : ""
+                            }`}
+                        >
 
                             {mediaLoading && (
                                 <div className="video-placeholder">
@@ -1392,86 +1565,123 @@ function MeetingRoom() {
                             </div>
                         </div>
 
-                        {/* REMOTE VIDEO TILES */}
+                        {/* LOCAL SCREEN SHARE PREVIEW */}
 
-                        {remoteStreams.map(({ peerId, stream }) => {
-                            const participant = participants.find(
-                                p => p.id === peerId
-                            );
+                        {screenShareEnabled && (
+                            <div className="video-tile screen-share-tile">
+                                <video
+                                    ref={element => {
+                                        screenVideoRef.current = element;
 
-                            const hasVideo = stream
-                                .getVideoTracks()
-                                .some(track => track.readyState === "live");
+                                        if (
+                                            element &&
+                                            screenStreamRef.current &&
+                                            element.srcObject !== screenStreamRef.current
+                                        ) {
+                                            element.srcObject = screenStreamRef.current;
+                                            element.play().catch(() => {});
+                                        }
+                                    }}
+                                    autoPlay
+                                    muted
+                                    playsInline
+                                />
 
-                            return (
-                                <div
-                                    className="video-tile remote-video-tile"
-                                    key={peerId}
-                                >
-                                    {hasVideo ? (
+                                <div className="video-tile-footer">
+                                    <span>You are sharing your screen</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* REMOTE AUDIO PRODUCERS */}
+
+                        {remoteStreams
+                            .filter(media => media.kind === "audio")
+                            .map(media => (
+                                <audio
+                                    key={media.producerId}
+                                    autoPlay
+                                    playsInline
+                                    ref={element => {
+                                        if (
+                                            element &&
+                                            element.srcObject !== media.stream
+                                        ) {
+                                            element.srcObject = media.stream;
+                                            element.play().catch(() => {});
+                                        }
+                                    }}
+                                />
+                            ))}
+
+                        {/* REMOTE CAMERA AND SCREEN VIDEO PRODUCERS */}
+
+                        {remoteStreams
+                            .filter(media => media.kind === "video")
+                            .map(media => {
+                                const participant = participants.find(
+                                    p => p.id === media.peerId
+                                );
+
+                                const isScreen = media.source === "screen";
+
+                                return (
+                                    <div
+                                        className={`video-tile remote-video-tile ${
+                                            isScreen ? "screen-share-tile" : ""
+                                        }`}
+                                        key={media.producerId}
+                                    >
                                         <video
                                             autoPlay
                                             playsInline
                                             ref={element => {
                                                 if (
                                                     element &&
-                                                    element.srcObject !== stream
+                                                    element.srcObject !== media.stream
                                                 ) {
-                                                    element.srcObject = stream;
+                                                    element.srcObject = media.stream;
                                                     element.play().catch(() => {});
                                                 }
                                             }}
                                             className="local-video"
                                         />
-                                    ) : (
-                                        <div className="video-camera-off">
-                                            <div className="video-avatar">
-                                                {participant?.fullName
-                                                    ?.charAt(0)
-                                                    ?.toUpperCase() || "U"}
-                                            </div>
-                                            <span>Camera is off</span>
-                                            <audio
-                                                autoPlay
-                                                ref={element => {
-                                                    if (
-                                                        element &&
-                                                        element.srcObject !== stream
-                                                    ) {
-                                                        element.srcObject = stream;
-                                                        element.play().catch(() => {});
-                                                    }
-                                                }}
-                                            />
-                                        </div>
-                                    )}
 
-                                    <div className="video-tile-footer">
-                                        <span>
-                                            {participant?.fullName || "Participant"}
-                                            {participant?.role === "HOST"
-                                                ? " (Host)"
-                                                : ""}
-                                        </span>
+                                        <div className="video-tile-footer">
+                                            <span>
+                                                {isScreen
+                                                    ? `${participant?.fullName || "Participant"} · Screen`
+                                                    : `${participant?.fullName || "Participant"}${
+                                                        participant?.role === "HOST"
+                                                            ? " (Host)"
+                                                            : ""
+                                                    }`}
+                                            </span>
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
 
                         {/* EMPTY STATE */}
 
-                        {!remoteStreams.length && (
-                            <div className="video-tile empty-video-tile">
-                                <div className="empty-video-content">
-                                    <Users size={35} />
-                                    <h3>Waiting for participants</h3>
-                                    <p>
-                                        Other participants' audio and video
-                                        will appear here when they join.
-                                    </p>
+
+                        {/* EMPTY STATE */}
+
+                        {!hasActiveScreenShare &&
+                            !remoteStreams.some(media => media.kind === "video") && (
+                                <div className="video-tile empty-video-tile">
+                                    <div className="empty-video-content">
+                                        <Users size={35} />
+
+                                        <h3>Waiting for participants</h3>
+
+                                        <p>
+                                            Other participants' audio and video
+                                            will appear here when they join.
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
                     </div>
 
                     {mediaError && (
@@ -1683,12 +1893,37 @@ function MeetingRoom() {
                     </button>
 
                     <button
-                        className="control-button"
-                        disabled
-                        title="Coming soon"
+                        className={`control-button ${
+                            screenShareEnabled ? "control-disabled" : ""
+                        }`}
+                        onClick={
+                            screenShareEnabled
+                                ? stopScreenShare
+                                : startScreenShare
+                        }
+                        disabled={
+                            meeting.status !== "LIVE" ||
+                            !sfuConnected ||
+                            screenShareLoading
+                        }
+                        title={
+                            meeting.status !== "LIVE"
+                                ? "Start the meeting before sharing"
+                                : "Share your screen"
+                        }
                     >
-                        <MonitorUp size={21} />
-                        <span>Share</span>
+                        {screenShareLoading
+                            ? <LoaderCircle size={21} className="room-spin" />
+                            : <MonitorUp size={21} />
+                        }
+                        <span>
+                            {screenShareLoading
+                                ? "Starting..."
+                                : screenShareEnabled
+                                    ? "Stop sharing"
+                                    : "Share screen"
+                            }
+                        </span>
                     </button>
                 </div>
 

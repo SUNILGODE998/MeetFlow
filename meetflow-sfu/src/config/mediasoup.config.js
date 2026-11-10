@@ -49,5 +49,17 @@ export const mediasoupConfig = {
         enableTcp: true,
         preferUdp: true,
         initialAvailableOutgoingBitrate: 1000000
+    },
+    recording: {
+        listenInfo: {
+            protocol: "udp",
+            ip: "127.0.0.1"
+        },
+        rtcpMux: true,
+        comedia: false,
+        outputDirectory:
+            process.env.RECORDING_OUTPUT_DIR || "./recordings",
+        ffmpegPath:
+            process.env.FFMPEG_PATH || "ffmpeg"
     }
 };

@@ -1,0 +1,36 @@
+/* Screen-sharing layout */
+.screen-share-tile {
+    grid-column: span 2;
+    min-height: 350px;
+    position: relative;
+    overflow: hidden;
+}
+
+.screen-share-tile video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 350px;
+    object-fit: contain;
+    background: #111;
+}
+
+.local-screen-share {
+    border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+/* Keep remote audio elements from affecting the video grid layout. */
+.room-video-grid > audio {
+    display: none;
+}
+
+@media (max-width: 760px) {
+    .screen-share-tile {
+        grid-column: 1 / -1;
+        min-height: 240px;
+    }
+
+    .screen-share-tile video {
+        min-height: 240px;
+    }
+}
