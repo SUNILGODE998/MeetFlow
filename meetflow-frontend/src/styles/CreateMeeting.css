@@ -1,0 +1,361 @@
+
+/* ==========================================
+   MEETFLOW - CREATE MEETING
+========================================== */
+
+.create-meeting-page {
+    min-height: 100vh;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 30px 5%;
+    background: #0b1020;
+    color: #f8fafc;
+    font-family: Inter, system-ui, sans-serif;
+}
+
+/* HEADER */
+
+.create-header {
+    max-width: 1100px;
+    margin: 0 auto 45px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 22px;
+}
+
+.create-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #a78bfa;
+    text-decoration: none;
+    font-size: 14px;
+    transition: color 0.2s;
+}
+
+.create-back-link:hover {
+    color: #c4b5fd;
+}
+
+.create-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #ffffff;
+    font-size: 23px;
+    font-weight: 750;
+    letter-spacing: -0.5px;
+}
+
+/* MAIN */
+
+.create-main {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.create-heading {
+    margin-bottom: 30px;
+}
+
+.create-heading > span {
+    display: block;
+    margin-bottom: 12px;
+    color: #a78bfa;
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: 1.8px;
+}
+
+.create-heading h1 {
+    margin: 0 0 12px;
+    color: #f8fafc;
+    font-size: clamp(30px, 4vw, 40px);
+    font-weight: 750;
+    letter-spacing: -1.3px;
+}
+
+.create-heading p {
+    margin: 0;
+    color: #94a3b8;
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+/* FORM CARD */
+
+.create-card {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 32px;
+    border: 1px solid #26344d;
+    border-radius: 18px;
+    background: #111a2d;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.22);
+}
+
+/* INPUT FIELDS */
+
+.create-field {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+    margin-bottom: 25px;
+}
+
+.create-field > label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #e2e8f0;
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.create-field input,
+.create-field textarea {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 14px 15px;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    outline: none;
+    background: #0b1222;
+    color: #f8fafc;
+    font-family: inherit;
+    font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.create-field input {
+    min-height: 48px;
+}
+
+.create-field textarea {
+    min-height: 110px;
+    resize: vertical;
+    line-height: 1.6;
+}
+
+.create-field input::placeholder,
+.create-field textarea::placeholder {
+    color: #64748b;
+}
+
+.create-field input:focus,
+.create-field textarea:focus {
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+}
+
+.create-field input[type="datetime-local"] {
+    color-scheme: dark;
+}
+
+/* MEETING TYPE */
+
+.meeting-type-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px;
+    width: 100%;
+}
+
+.meeting-type-option {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    min-height: 82px;
+    box-sizing: border-box;
+    padding: 18px;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    background: #0f172a;
+    color: #cbd5e1;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.meeting-type-option:hover {
+    border-color: #8b5cf6;
+    background: #171b35;
+}
+
+.meeting-type-option.selected {
+    border-color: #8b5cf6;
+    background: rgba(139, 92, 246, 0.16);
+    color: #c4b5fd;
+    box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.12);
+}
+
+.meeting-type-option svg {
+    flex-shrink: 0;
+    color: #a78bfa;
+}
+
+.meeting-type-option strong {
+    display: block;
+    color: #e2e8f0;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.meeting-type-option span {
+    color: #94a3b8;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+/* SETTINGS */
+
+.create-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 5px;
+}
+
+.create-setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 17px 18px;
+    border: 1px solid #26344d;
+    border-radius: 12px;
+    background: #0f172a;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.create-setting:hover {
+    border-color: #64748b;
+    background: #131e33;
+}
+
+.create-setting > div {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+}
+
+.create-setting > div > svg {
+    flex-shrink: 0;
+    color: #a78bfa;
+}
+
+.create-setting > div > span {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.create-setting strong {
+    color: #f1f5f9;
+    font-size: 14px;
+}
+
+.create-setting small {
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+.create-setting input[type="checkbox"] {
+    width: 19px;
+    height: 19px;
+    flex-shrink: 0;
+    accent-color: #8b5cf6;
+    cursor: pointer;
+}
+
+/* ERROR */
+
+.create-error {
+    margin-top: 20px;
+    padding: 13px 15px;
+    border: 1px solid #7f1d1d;
+    border-radius: 10px;
+    background: rgba(127, 29, 29, 0.2);
+    color: #fca5a5;
+    font-size: 14px;
+}
+
+/* SUBMIT BUTTON */
+
+.create-submit {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 52px;
+    margin-top: 27px;
+    padding: 14px 22px;
+    border: 1px solid #8b5cf6;
+    border-radius: 11px;
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    color: #ffffff;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.create-submit:hover:not(:disabled) {
+    transform: translateY(-2px);
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    box-shadow: 0 10px 30px rgba(124, 58, 237, 0.25);
+}
+
+.create-submit:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.create-submit svg {
+    flex-shrink: 0;
+}
+
+.create-spin {
+    animation: create-spin-animation 1s linear infinite;
+}
+
+@keyframes create-spin-animation {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* RESPONSIVE */
+
+@media (max-width: 650px) {
+    .create-meeting-page {
+        padding: 22px 16px;
+    }
+
+    .create-header {
+        margin-bottom: 32px;
+    }
+
+    .create-card {
+        padding: 20px;
+    }
+
+    .meeting-type-options {
+        grid-template-columns: 1fr;
+    }
+
+    .meeting-type-option {
+        min-height: 72px;
+    }
+
+    .create-heading h1 {
+        font-size: 30px;
+    }
+}
