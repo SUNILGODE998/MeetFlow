@@ -14,7 +14,7 @@ import {
 import {
     createMeeting,
     startMeeting
-} from "../services/meeting";
+} from "../services/Meeting.js";
 
 import "../styles/CreateMeeting.css";
 
